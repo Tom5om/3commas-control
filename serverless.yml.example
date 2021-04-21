@@ -1,0 +1,91 @@
+app: 3commas-bot
+service: one-bot-to-rule-them-all
+custom:
+  currentStage: ${opt:stage, self:provider.stage}
+  settings:
+    ACCOUNT_ID: "361936220281"
+    currentStage: ${opt:stage, self:provider.stage}
+    THREE_COMMAS_API_KEY: ""
+    THREE_COMMAS_API_SECRET: ""
+    THREE_COMMAS_ACCOUNT_ID: 29769917
+    DYNAMODB_TABLE: ${self:service}-${opt:stage, self:provider.stage}
+    CONFIG_DYNAMODB_ENDPOINT: 'http://localhost:8000'
+  dynamodb:
+    start:
+      migrate: true
+    stages:
+      - dev
+
+provider:
+  name: aws
+  stage: dev
+  runtime: nodejs12.x
+  region: ap-southeast-2
+  environment: ${self:custom.settings}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource: "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
+
+functions:
+  handleBots:
+    handler: botHandler.handleBots
+    events:
+      - schedule: cron(5,15,25,35,45,55 * * * ? *)
+      - http:
+          method: get
+          path: handleBots
+  updateDeals:
+    handler: botHandler.updateAllDeals
+    events:
+      - http:
+          method: get
+          path: updateAllDeals
+  setup:
+    handler: sheetHandler.setup
+    events:
+      - http:
+          method: get
+          path: setup
+  updateSheets:
+    handler: sheetHandler.updateSheets
+    events:
+      - http:
+          method: get
+          path: updateSheets
+resources:
+  Resources:
+    TodosDynamoDbTable:
+      Type: 'AWS::DynamoDB::Table'
+      DeletionPolicy: Retain
+      Properties:
+        AttributeDefinitions:
+          -
+            AttributeName: id
+            AttributeType: S
+        KeySchema:
+          -
+            AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:provider.environment.DYNAMODB_TABLE}
+
+
+package:
+  excludeDevDependencies: false
+  individually: true
+
+plugins:
+- serverless-dynamodb-local
+- serverless-plugin-include-dependencies
+- serverless-offline
