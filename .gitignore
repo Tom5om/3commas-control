@@ -1,0 +1,5 @@
+/.idea
+/.serverless/
+/serverless.yml
+/credentials.json
+/node_modules/
