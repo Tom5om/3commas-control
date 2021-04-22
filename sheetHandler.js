@@ -14,47 +14,6 @@ const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 // time.
 const TOKEN_PATH = 'token.json';
 
-module.exports.setup = () => {
-
-    // Load client secrets from a local file.
-    fs.readFile(path.resolve(__dirname, './credentials.json'), (err, content) => {
-        if (err) return console.log('Error loading client secret file:', err);
-        // Authorize a client with credentials, then call the Google Sheets API.
-        return authorize(JSON.parse(content), listMajors);
-    });
-}
-
-/**
- * Create an OAuth2 client with the given credentials, and then execute the
- * given callback function.
- * @param {Object} credentials The authorization client credentials.
- * @param {function} callback The callback to call with the authorized client.
- */
-async function authorize(credentials, callback) {
-    const { client_secret, client_id, redirect_uris } = credentials.installed;
-    const oAuth2Client = new google.auth.OAuth2(
-        client_id, client_secret, redirect_uris[0]);
-
-    const params = {
-        TableName: process.env.DYNAMODB_TABLE,
-        Key: {
-            id: 'token',
-        },
-    };
-
-    // Check if we have previously stored a token.
-    const tokenRecord = await dynamoDb.get(params).promise();
-    const token = tokenRecord.token;
-
-    if(!token) {
-        return getNewToken(oAuth2Client, callback);
-    } else {
-        oAuth2Client.setCredentials(JSON.parse(token));
-        callback(oAuth2Client);
-    }
-}
-
-
 /**
  * Get the token
  */
@@ -76,10 +35,10 @@ const getAuth = async () => {
 
     // Check if we have previously stored a token.
     const tokenRecord = await dynamoDb.get(params).promise();
-    const token = tokenRecord.token;
+    let token = tokenRecord.Item.token;
 
     if (!token) {
-        return getNewToken(oAuth2Client, callback);
+        return getNewToken(oAuth2Client);
     }
     oAuth2Client.setCredentials(JSON.parse(token));
     return oAuth2Client;
@@ -91,44 +50,39 @@ const getAuth = async () => {
  * @param {google.auth.OAuth2} oAuth2Client The OAuth2 client to get token for.
  * @param {getEventsCallback} callback The callback for the authorized client.
  */
-function getNewToken(oAuth2Client, callback) {
-    const authUrl = oAuth2Client.generateAuthUrl({
-        access_type: 'offline',
-        scope: SCOPES,
-    });
-    console.log('Authorize this app by visiting this url:', authUrl);
-    const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout,
-    });
-    rl.question('Enter the code from that page here: ', (code) => {
-        rl.close();
-        oAuth2Client.getToken(code, (err, token) => {
-            if (err) return console.error('Error while trying to retrieve access token', err);
-            oAuth2Client.setCredentials(token);
+function getNewToken(oAuth2Client) {
 
-            const params = {
-                TableName: process.env.DYNAMODB_TABLE,
-                Item: {
-                    id: "token",
-                    token: JSON.stringify(token),
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
-                },
-            };
-
-            dynamoDb.put(params).promise().then(() => {
-                callback(oAuth2Client);
-            }).catch(error => {
-                if (error) {
-                    console.error(error);
-                    callback(null, {
-                        statusCode: error.statusCode || 501,
-                        headers: { 'Content-Type': 'text/plain' },
-                        body: 'Couldn\'t create the token.',
-                    });
-                    return;
+    return new Promise((resolve, reject) => {
+        const authUrl = oAuth2Client.generateAuthUrl({
+            access_type: 'offline',
+            scope: SCOPES,
+        });
+        console.log('Authorize this app by visiting this url:', authUrl);
+        const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout,
+        });
+        rl.question('Enter the code from that page here: ', (code) => {
+            rl.close();
+            oAuth2Client.getToken(code, async (err, token) => {
+                if (err) {
+                    reject(err)
                 }
+
+                oAuth2Client.setCredentials(token);
+
+                const params = {
+                    TableName: process.env.DYNAMODB_TABLE,
+                    Item: {
+                        id: "token",
+                        token: JSON.stringify(token),
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                    },
+                };
+
+                await dynamoDb.put(params).promise();
+                resolve(oAuth2Client);
             });
         });
     });
@@ -188,7 +142,7 @@ const updateSheets = (resource) => {
                 console.log('%d cells updated.', result.updatedCells);
                 return resolve({
                     statusCode: 200,
-                    body: JSON.stringify({ message: 'Updated your sheets, see logs', success: true, deals }),
+                    body: JSON.stringify({ message: 'Updated your sheets, see logs', success: true, resource }),
                 });
             }
         });
