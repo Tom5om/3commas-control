@@ -10,8 +10,8 @@ const ACCOUNT_ID_TOM = process.env.THREE_COMMAS_ACCOUNT_ID;
 
 const getAllActiveDeals = async () => {
     const allDeals = await api.getDeals({ scope: "active", limit: 100 });
-    console.log(allDeals[0]);
-    return _.filter(allDeals, { account_id: ACCOUNT_ID_TOM });
+    const filteredDeals = _.filter(allDeals, { account_id: parseInt(ACCOUNT_ID_TOM,10) });
+    return filteredDeals;
 }
 
 const getDeal = async (dealId) => {

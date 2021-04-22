@@ -96,6 +96,7 @@ module.exports.updateSheets = async () => {
         return Object.values(_.pick(deal, fields))
     });
 
+
     deals.unshift(fields);
 
     const values = deals;
@@ -111,7 +112,7 @@ module.exports.updateSheets = async () => {
     };
 
     try {
-        const result = await updateSheets();
+        const result = await updateSheets(resource);
         return result;
     } catch (error) {
         return error;
@@ -139,6 +140,8 @@ const updateSheets = (resource) => {
                     body: JSON.stringify({ message: 'Error updating your sheets', success: false }),
                 });
             } else {
+
+                console.log(result);
                 console.log('%d cells updated.', result.updatedCells);
                 return resolve({
                     statusCode: 200,
