@@ -2,17 +2,12 @@ const fs = require('fs').promises;
 const readline = require('readline');
 const { google } = require('googleapis');
 const path = require('path');
-const { updateAllDeals, getAllActiveDeals, getDeal } = require('./services/apiService');
+const { getAllActiveDeals, getBalances } = require('./services/apiService');
 const _ = require('lodash');
 const dynamoDb = require('./lib/db');
 const uuid = require('uuid');
 
-// If modifying these scopes, delete token.json.
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
-// The file token.json stores the user's access and refresh tokens, and is
-// created automatically when the authorization flow completes for the first
-// time.
-const TOKEN_PATH = 'token.json';
 
 /**
  * Get the token
@@ -35,7 +30,7 @@ const getAuth = async () => {
 
     // Check if we have previously stored a token.
     const tokenRecord = await dynamoDb.get(params).promise();
-    let token = tokenRecord.Item.token;
+    let token = tokenRecord.Item ? tokenRecord.Item.token : false;
 
     if (!token) {
         return getNewToken(oAuth2Client);
@@ -89,17 +84,32 @@ function getNewToken(oAuth2Client) {
 }
 
 module.exports.updateSheets = async () => {
-    let deals = await getAllActiveDeals();
 
-    const fields = ['id', 'pair', 'account_id', 'bot_name', 'completed_safety_orders_count', 'take_profit', 'trailing_enabled', 'trailing_deviation', 'base_order_volume', 'safety_order_volume', 'bought_average_price', 'take_profit_price', 'final_profit'];
+    const balances = await getBalances(process.env.THREE_COMMAS_ACCOUNT_ID);
+
+    const balanceFields = ['currency_code', 'usd_value'];
+    const usd = balances.map(item => {
+        return Object.values(_.pick(item, balanceFields))
+    });
+
+    usd.unshift(balanceFields);
+
+    const balanceResources = {
+        values: usd,
+    };
+
+    const result = await updateSheets(balanceResources, 'Balances!A1:C5');
+
+    let deals = await getAllActiveDeals();
+    console.log(deals[0]);
+
+    const fields = ['id', 'pair', 'account_id', 'bot_name', 'completed_safety_orders_count', 'take_profit', 'trailing_enabled', 'trailing_deviation', 'base_order_volume', 'safety_order_volume', 'bought_average_price', 'take_profit_price', 'actual_profit', 'reserved_base_coin', 'reserved_second_coin'];
     deals = deals.map(deal => {
         return Object.values(_.pick(deal, fields))
     });
 
 
     deals.unshift(fields);
-
-    const values = deals;
 
     // let values = [
     //     [
@@ -108,18 +118,18 @@ module.exports.updateSheets = async () => {
     //     // Additional rows ...
     // ];
     const resource = {
-        values,
+        values: deals,
     };
 
     try {
-        const result = await updateSheets(resource);
+        const result = await updateSheets(resource, 'A1:Z200');
         return result;
     } catch (error) {
         return error;
     }
 }
 
-const updateSheets = (resource) => {
+const updateSheets = (resource, range) => {
     return new Promise(async (resolve, reject) => {
 
         const auth = await getAuth();
@@ -129,7 +139,7 @@ const updateSheets = (resource) => {
         sheets.spreadsheets.values.update({
             spreadsheetId: '1SGWamuCKD2rct5M9ADMSk8_ttysHVFIKBrgta8flRfs',
             valueInputOption: "RAW",
-            range: 'A1:Z200',
+            range,
             resource,
         }, (err, result) => {
             if (err) {
@@ -141,7 +151,6 @@ const updateSheets = (resource) => {
                 });
             } else {
 
-                console.log(result);
                 console.log('%d cells updated.', result.updatedCells);
                 return resolve({
                     statusCode: 200,

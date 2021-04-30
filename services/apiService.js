@@ -14,6 +14,21 @@ const getAllActiveDeals = async () => {
     return filteredDeals;
 }
 
+/**
+ * Get account from accounts list (holds the total USD)
+ * @param accountId
+ * @returns {Promise<unknown>}
+ */
+const getAccount = async (accountId) => {
+    const accounts = await api.accounts();
+    return _.find(accounts, {id: parseInt(accountId, 10)})
+}
+
+const getBalances = async (accountId) => {
+    const accounts = await api.accountTableData(accountId);
+    return _.filter(accounts, (account) => account.currency_code.includes('USD'));
+}
+
 const getDeal = async (dealId) => {
     console.log(await api.getDeal(dealId));
 }
@@ -57,5 +72,7 @@ const updateAllDeals = async (minSafetyOrders, params) => {
 module.exports = {
     getAllActiveDeals,
     getDeal,
-    updateAllDeals
+    updateAllDeals,
+    getAccount,
+    getBalances
 };
