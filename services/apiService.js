@@ -6,11 +6,10 @@ const api = new apiLib({
 });
 const _ = require("lodash");
 
-const ACCOUNT_ID_TOM = process.env.THREE_COMMAS_ACCOUNT_ID;
 
-const getAllActiveDeals = async () => {
+const getAllActiveDeals = async (accountId) => {
     const allDeals = await api.getDeals({ scope: "active", limit: 100 });
-    const filteredDeals = _.filter(allDeals, { account_id: parseInt(ACCOUNT_ID_TOM,10) });
+    const filteredDeals = _.filter(allDeals, { account_id: parseInt(accountId,10) });
     return filteredDeals;
 }
 
@@ -29,12 +28,19 @@ const getBalances = async (accountId) => {
     return _.filter(accounts, (account) => account.currency_code.includes('USD'));
 }
 
+const getBotStats = async (params) => {
+    const result = await api.getBotsStats(params);
+    console.log(result);
+    return result;
+    // return _.filter(accounts, (account) => account.currency_code.includes('USD'));
+}
+
 const getDeal = async (dealId) => {
     console.log(await api.getDeal(dealId));
 }
 
-const updateAllDeals = async (minSafetyOrders, params) => {
-    const deals = await getAllActiveDeals();
+const updateAllDeals = async (accountId, minSafetyOrders, params) => {
+    const deals = await getAllActiveDeals(accountId);
 
     const promiseList = [];
 
@@ -74,5 +80,7 @@ module.exports = {
     getDeal,
     updateAllDeals,
     getAccount,
-    getBalances
+    getBalances,
+    getBotStats,
+    ACCOUNT_ID_TOM
 };

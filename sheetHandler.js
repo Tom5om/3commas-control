@@ -2,7 +2,7 @@ const fs = require('fs').promises;
 const readline = require('readline');
 const { google } = require('googleapis');
 const path = require('path');
-const { getAllActiveDeals, getBalances } = require('./services/apiService');
+const apiService = require('./services/apiService');
 const _ = require('lodash');
 const dynamoDb = require('./lib/db');
 const uuid = require('uuid');
@@ -85,7 +85,14 @@ function getNewToken(oAuth2Client) {
 
 module.exports.updateSheets = async () => {
 
-    const balances = await getBalances(process.env.THREE_COMMAS_ACCOUNT_ID);
+    const botStats = apiService.getBotStats({account_id: apiService.ACCOUNT_ID_TOM, bot_id: 3460139});
+
+    return {
+        statusCode: 200,
+        body: JSON.stringify({ botStats }),
+    }
+
+    const balances = await apiService.getBalances(process.env.THREE_COMMAS_ACCOUNT_ID);
 
     const balanceFields = ['currency_code', 'usd_value'];
     const usd = balances.map(item => {
@@ -100,10 +107,10 @@ module.exports.updateSheets = async () => {
 
     const result = await updateSheets(balanceResources, 'Balances!A1:C5');
 
-    let deals = await getAllActiveDeals();
+    let deals = await apiService.getAllActiveDeals();
     console.log(deals[0]);
 
-    const fields = ['id', 'pair', 'account_id', 'bot_name', 'completed_safety_orders_count', 'take_profit', 'trailing_enabled', 'trailing_deviation', 'base_order_volume', 'safety_order_volume', 'bought_average_price', 'take_profit_price', 'actual_profit', 'reserved_base_coin', 'reserved_second_coin'];
+    const fields = ['id', 'pair', 'account_id', 'bot_id', 'bot_name', 'completed_safety_orders_count', 'take_profit', 'trailing_enabled', 'trailing_deviation', 'base_order_volume', 'safety_order_volume', 'bought_average_price', 'take_profit_price', 'actual_profit', 'reserved_base_coin', 'reserved_second_coin'];
     deals = deals.map(deal => {
         return Object.values(_.pick(deal, fields))
     });
