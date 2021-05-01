@@ -8,6 +8,7 @@ custom:
     THREE_COMMAS_API_KEY: ""
     THREE_COMMAS_API_SECRET: ""
     THREE_COMMAS_ACCOUNT_ID: 29769917
+    THREE_COMMAS_ACCOUNT_ID_CHRIS: 29746972
     DYNAMODB_TABLE: ${self:service}-${opt:stage, self:provider.stage}
     CONFIG_DYNAMODB_ENDPOINT: 'http://localhost:8000'
   dynamodb:
