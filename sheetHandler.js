@@ -85,12 +85,12 @@ function getNewToken(oAuth2Client) {
 
 module.exports.updateSheets = async () => {
 
-    const botStats = apiService.getBotStats({account_id: apiService.ACCOUNT_ID_TOM, bot_id: 3460139});
-
-    return {
-        statusCode: 200,
-        body: JSON.stringify({ botStats }),
-    }
+    // const botStats = apiService.getBotStats({account_id: apiService.ACCOUNT_ID_TOM, bot_id: 3460139});
+    //
+    // return {
+    //     statusCode: 200,
+    //     body: JSON.stringify({ botStats }),
+    // }
 
     const balances = await apiService.getBalances(process.env.THREE_COMMAS_ACCOUNT_ID);
 

@@ -39,7 +39,7 @@ const getDeal = async (dealId) => {
     console.log(await api.getDeal(dealId));
 }
 
-const updateAllDeals = async (accountId, minSafetyOrders, params) => {
+const updateAllDeals = async (accountId, minSafetyOrders, trailingEnabled, params) => {
     const deals = await getAllActiveDeals(accountId);
 
     const promiseList = [];
@@ -47,7 +47,7 @@ const updateAllDeals = async (accountId, minSafetyOrders, params) => {
     const newDeals = [];
     deals.forEach(deal => {
         const partialDeal = _.pick(deal, ['id', 'pair', 'account_id', 'bot_name', 'completed_safety_orders_count', 'take_profit', 'trailing_enabled', 'trailing_deviation', 'base_order_volume'])
-        if (deal.completed_safety_orders_count >= minSafetyOrders && !deal.trailing_enabled) {
+        if (deal.completed_safety_orders_count >= minSafetyOrders && deal.trailing_enabled === trailingEnabled) {
             newDeals.push(partialDeal);
             promiseList.push(new Promise((resolve, reject) => {
                 return api.dealUpdate(deal.id, params).then(updatedDeal => {
@@ -81,6 +81,5 @@ module.exports = {
     updateAllDeals,
     getAccount,
     getBalances,
-    getBotStats,
-    ACCOUNT_ID_TOM
+    getBotStats
 };

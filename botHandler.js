@@ -7,7 +7,7 @@ const ACCOUNT_ID_CHRIS = process.env.THREE_COMMAS_ACCOUNT_ID_CHRIS;
 module.exports.handleBots = async () => {
     console.log("STARTING update of all bots");
 
-    const deals = await updateAllDeals(ACCOUNT_ID_TOM,3, {
+    const deals = await updateAllDeals(ACCOUNT_ID_TOM,3, false, {
         trailing_enabled: true,
         take_profit: 2,
         trailing_deviation: 0.5
@@ -23,7 +23,7 @@ module.exports.handleBots = async () => {
 module.exports.handleChrisBots = async () => {
     console.log("STARTING update of all Chris bots");
 
-    const deals = await updateAllDeals(ACCOUNT_ID_CHRIS, 2, {
+    const deals = await updateAllDeals(ACCOUNT_ID_CHRIS, 3, false, {
         trailing_enabled: true,
         take_profit: 2,
         trailing_deviation: 0.5
@@ -37,7 +37,7 @@ module.exports.handleChrisBots = async () => {
 };
 
 module.exports.updateAllDeals = async () => {
-    const deals = await updateAllDeals(3, {
+    const deals = await updateAllDeals(ACCOUNT_ID_TOM, 3, true, {
         trailing_enabled: false,
         take_profit: 1.5,
         trailing_deviation: 0.5
