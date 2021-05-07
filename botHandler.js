@@ -7,7 +7,7 @@ const ACCOUNT_ID_CHRIS = process.env.THREE_COMMAS_ACCOUNT_ID_CHRIS;
 module.exports.handleBots = async () => {
     console.log("STARTING update of all bots");
 
-    filters.push((deal) => deal.completed_safety_orders_count <= 3);
+    filters.push((deal) => deal.completed_safety_orders_count >= 3);
     filters.push({trailing_enabled: false});
     filters.push((deal) => !deal.bot_name.includes("(SKIP)"));
 
@@ -27,7 +27,7 @@ module.exports.handleBots = async () => {
 module.exports.handleChrisBots = async () => {
     console.log("STARTING update of all Chris bots");
 
-    filters.push((deal) => deal.completed_safety_orders_count <= 3);
+    filters.push((deal) => deal.completed_safety_orders_count >= 3);
     filters.push({trailing_enabled: false});
     filters.push((deal) => !deal.bot_name.includes("(SKIP)"));
 
