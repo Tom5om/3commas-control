@@ -9,6 +9,9 @@ const uuid = require('uuid');
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 
+const ACCOUNT_ID_TOM = process.env.THREE_COMMAS_ACCOUNT_ID;
+const ACCOUNT_ID_CHRIS = process.env.THREE_COMMAS_ACCOUNT_ID_CHRIS;
+
 /**
  * Get the token
  */
@@ -107,7 +110,7 @@ module.exports.updateSheets = async () => {
 
     const result = await updateSheets(balanceResources, 'Balances!A1:C5');
 
-    let deals = await apiService.getAllActiveDeals();
+    let deals = await apiService.getAllActiveDeals(ACCOUNT_ID_TOM);
     console.log(deals[0]);
 
     const fields = ['id', 'pair', 'account_id', 'bot_id', 'bot_name', 'completed_safety_orders_count', 'take_profit', 'trailing_enabled', 'trailing_deviation', 'base_order_volume', 'safety_order_volume', 'bought_average_price', 'take_profit_price', 'actual_profit', 'reserved_base_coin', 'reserved_second_coin'];

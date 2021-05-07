@@ -7,10 +7,20 @@ const api = new apiLib({
 const _ = require("lodash");
 
 
-const getAllActiveDeals = async (accountId) => {
+const getAllActiveDeals = async (accountId, filters) => {
     const allDeals = await api.getDeals({ scope: "active", limit: 100 });
-    const filteredDeals = _.filter(allDeals, { account_id: parseInt(accountId,10) });
-    return filteredDeals;
+
+    let dealsForAccount = _.filter(allDeals, { account_id: parseInt(accountId,10) });
+    let newFilteredDeals;
+
+    if (filters.length > 0) {
+        const newCombinedPredicate = _.overEvery(filters);
+        newFilteredDeals = _.filter(dealsForAccount, newCombinedPredicate)
+    } else {
+        newFilteredDeals = dealsForAccount
+    }
+
+    return newFilteredDeals;
 }
 
 /**
@@ -39,14 +49,15 @@ const getDeal = async (dealId) => {
     console.log(await api.getDeal(dealId));
 }
 
-const updateAllDeals = async (accountId, minSafetyOrders, trailingEnabled, params) => {
-    const deals = await getAllActiveDeals(accountId);
+const updateAllDeals = async (accountId, filters, params) => {
+    const deals = await getAllActiveDeals(accountId, filters);
 
     const promiseList = [];
 
     const newDeals = [];
     deals.forEach(deal => {
         const partialDeal = _.pick(deal, ['id', 'pair', 'account_id', 'bot_name', 'completed_safety_orders_count', 'take_profit', 'trailing_enabled', 'trailing_deviation', 'base_order_volume'])
+
         if (deal.completed_safety_orders_count >= minSafetyOrders && deal.trailing_enabled === trailingEnabled) {
             newDeals.push(partialDeal);
             promiseList.push(new Promise((resolve, reject) => {

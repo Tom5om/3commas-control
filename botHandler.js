@@ -7,10 +7,14 @@ const ACCOUNT_ID_CHRIS = process.env.THREE_COMMAS_ACCOUNT_ID_CHRIS;
 module.exports.handleBots = async () => {
     console.log("STARTING update of all bots");
 
-    const deals = await updateAllDeals(ACCOUNT_ID_TOM,3, false, {
+    filters.push((deal) => deal.completed_safety_orders_count <= 3);
+    filters.push({trailing_enabled: false});
+    filters.push((deal) => !deal.bot_name.includes("(SKIP)"));
+
+    const deals = await updateAllDeals(ACCOUNT_ID_TOM, filters, {
         trailing_enabled: true,
-        take_profit: 2,
-        trailing_deviation: 0.5
+        take_profit: 1.9,
+        trailing_deviation: 0.4
     });
 
     console.log("FINISHED update of all bots");
@@ -23,7 +27,11 @@ module.exports.handleBots = async () => {
 module.exports.handleChrisBots = async () => {
     console.log("STARTING update of all Chris bots");
 
-    const deals = await updateAllDeals(ACCOUNT_ID_CHRIS, 3, false, {
+    filters.push((deal) => deal.completed_safety_orders_count <= 3);
+    filters.push({trailing_enabled: false});
+    filters.push((deal) => !deal.bot_name.includes("(SKIP)"));
+
+    const deals = await updateAllDeals(ACCOUNT_ID_CHRIS, {
         trailing_enabled: true,
         take_profit: 2,
         trailing_deviation: 0.5
@@ -37,7 +45,14 @@ module.exports.handleChrisBots = async () => {
 };
 
 module.exports.updateAllDeals = async () => {
-    const deals = await updateAllDeals(ACCOUNT_ID_TOM, 3, true, {
+
+    const filters = [];
+
+    filters.push((deal) => deal.completed_safety_orders_count >= 5);
+    filters.push({trailing_enabled: true});
+    filters.push((deal) => !deal.bot_name.includes("(SKIP)"));
+
+    const deals = await updateAllDeals(ACCOUNT_ID_TOM, filters, {
         trailing_enabled: false,
         take_profit: 1.5,
         trailing_deviation: 0.5
