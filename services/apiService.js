@@ -20,6 +20,7 @@ const getAllActiveDeals = async (accountId, filters) => {
         newFilteredDeals = dealsForAccount
     }
 
+
     return newFilteredDeals;
 }
 
@@ -56,20 +57,18 @@ const updateAllDeals = async (accountId, filters, params) => {
 
     const newDeals = [];
     deals.forEach(deal => {
-        const partialDeal = _.pick(deal, ['id', 'pair', 'account_id', 'bot_name', 'completed_safety_orders_count', 'take_profit', 'trailing_enabled', 'trailing_deviation', 'base_order_volume'])
+        const partialDeal = _.pick(deal, ['id', 'pair', 'account_id', 'bot_name', 'profit_currency', 'completed_safety_orders_count', 'take_profit', 'trailing_enabled', 'trailing_deviation', 'base_order_volume'])
 
-        if (deal.completed_safety_orders_count >= minSafetyOrders && deal.trailing_enabled === trailingEnabled) {
-            newDeals.push(partialDeal);
-            promiseList.push(new Promise((resolve, reject) => {
-                return api.dealUpdate(deal.id, params).then(updatedDeal => {
-                    console.log(`Updated: ${updatedDeal.id} |  ${deal.bot_name} | ${updatedDeal.trailing_enabled} | ${updatedDeal.trailing_deviation}`);
-                    resolve(updatedDeal);
-                }).catch(error => {
-                    console.log(error);
-                    reject(error);
-                })
-            }));
-        }
+        newDeals.push(partialDeal);
+        promiseList.push(new Promise((resolve, reject) => {
+            return api.dealUpdate(deal.id, params).then(updatedDeal => {
+                console.log(`Updated: ${updatedDeal.id} |  ${deal.bot_name} | ${updatedDeal.trailing_enabled} | ${updatedDeal.trailing_deviation} | ${updatedDeal.profit_currency} `);
+                resolve(updatedDeal);
+            }).catch(error => {
+                console.log(error);
+                reject(error);
+            })
+        }));
     });
 
 

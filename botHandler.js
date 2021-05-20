@@ -52,14 +52,15 @@ module.exports.updateAllDeals = async () => {
 
     const filters = [];
 
-    filters.push((deal) => deal.completed_safety_orders_count >= 5);
-    filters.push({trailing_enabled: true});
+    filters.push((deal) => deal.completed_safety_orders_count >= 1);
+    filters.push({trailing_enabled: false});
     filters.push((deal) => !deal.bot_name.includes("(SKIP)"));
 
     const deals = await updateAllDeals(ACCOUNT_ID_TOM, filters, {
         trailing_enabled: false,
         take_profit: 1.5,
-        trailing_deviation: 0.5
+        trailing_deviation: 0.5,
+        profit_currency: 'quote_currency'
     });
 
     return {
