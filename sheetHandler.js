@@ -6,6 +6,8 @@ const apiService = require('./services/apiService');
 const _ = require('lodash');
 const dynamoDb = require('./lib/db');
 const uuid = require('uuid');
+const { addDays } = require("date-fns");
+const {sub, differenceInDays, getDate} = require("date-fns");
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 
@@ -86,14 +88,90 @@ function getNewToken(oAuth2Client) {
     });
 }
 
+async function* dealsIterator(accountId, botId) {
+    const limit = 1000;
+    let offset = 0;
+    let hasMore = true;
+
+    do {
+        const params = {account_id: accountId, bot_id: botId,order: "closed_at", scope: "finished", limit, offset};
+        const data = await apiService.getBotStats(params);
+
+        yield data;
+
+        hasMore = data.length === limit;
+        offset += limit;
+    } while (hasMore);
+}
+
+async function getDeals(accountId, botId, from, to) {
+    const all = [];
+
+    iterator: for await (const deals of dealsIterator(accountId, botId)) {
+        if (Array.isArray(deals)) {
+            for (let i = 0, l = deals.length; i < l; i++) {
+                const deal = deals[i];
+                const closed = new Date(deal.closed_at);
+
+                if (closed < from) {
+                    break iterator;
+                } else if (closed > to) {
+                    continue;
+                }
+
+                all.push(deal);
+            }
+        }
+    }
+
+    return all;
+}
+
+const getDates = (fromDate, toDate) => {
+    const dates = [];
+    dates.push({ date: fromDate });
+    const difference = differenceInDays(toDate, fromDate);
+
+    for (let i = 1; i < difference; i++) {
+        const date = addDays(fromDate, i);
+        dates.push({ date });
+    }
+
+    return dates;
+}
+
+const getProfitPerDayForBot = async (accountId, botId, fromDate, toDate) => {
+    const botStats = await getDeals(accountId, botId, fromDate, toDate);
+
+    const dates = getDates(fromDate, toDate);
+
+    return dates.map(date => {
+        let sum = 0;
+        const dealsForDate = _.filter(botStats, deal => {
+
+            if (getDate(new Date(deal.closed_at)) === getDate(date.date)) {
+                sum += parseFloat(deal.actual_profit);
+                return true;
+            }
+            return false;
+        });
+        date.sum = sum
+        return date;
+    })
+}
+
+async function* botIterator(bots, fromDate, toDate) {
+    for (let i = 0; i < bots.length; i++) {
+        const profits = await getProfitPerDayForBot(process.env.THREE_COMMAS_ACCOUNT_ID, bots[i].bot_id, fromDate, toDate)
+        yield {
+            pair: bots[i].pair,
+            bot_name: bots[i].bot_name,
+            profits
+        }
+    }
+}
 module.exports.updateSheets = async () => {
 
-    // const botStats = apiService.getBotStats({account_id: apiService.ACCOUNT_ID_TOM, bot_id: 3460139});
-    //
-    // return {
-    //     statusCode: 200,
-    //     body: JSON.stringify({ botStats }),
-    // }
 
     const balances = await apiService.getBalances(process.env.THREE_COMMAS_ACCOUNT_ID);
 
@@ -110,8 +188,21 @@ module.exports.updateSheets = async () => {
 
     const result = await updateSheets(balanceResources, 'Balances!A1:C5');
 
-    let deals = await apiService.getAllActiveDeals(ACCOUNT_ID_TOM);
-    console.log(deals[0]);
+    let deals = await apiService.getAllActiveDeals(process.env.THREE_COMMAS_ACCOUNT_ID);
+    // console.log(deals[0]);
+
+    const now = new Date();
+    const toDate = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+    );
+    const fromDate = sub(toDate, { days: 7 });
+
+    const profits = [];
+
+    for await (const botProfit of botIterator(deals, fromDate, toDate)) {
+        console.log(botProfit);
+        profits.push(botProfit);
+    }
 
     const fields = ['id', 'pair', 'account_id', 'bot_id', 'bot_name', 'completed_safety_orders_count', 'take_profit', 'trailing_enabled', 'trailing_deviation', 'base_order_volume', 'safety_order_volume', 'bought_average_price', 'take_profit_price', 'actual_profit', 'reserved_base_coin', 'reserved_second_coin'];
     deals = deals.map(deal => {

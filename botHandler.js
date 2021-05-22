@@ -3,10 +3,17 @@ const { updateAllDeals } = require('./services/apiService');
 
 const ACCOUNT_ID_TOM = process.env.THREE_COMMAS_ACCOUNT_ID;
 const ACCOUNT_ID_CHRIS = process.env.THREE_COMMAS_ACCOUNT_ID_CHRIS;
+const SHOULD_RUN_BOTS = true;
 
 module.exports.handleBots = async () => {
     console.log("STARTING update of all bots");
 
+    if (!SHOULD_RUN_BOTS) {
+        return {
+            statusCode: 200,
+            body: JSON.stringify({ message: 'NOT UPDATING BOTS', success: true }),
+        };
+    }
     const filters = [];
 
     filters.push((deal) => deal.completed_safety_orders_count >= 3);
@@ -53,7 +60,7 @@ module.exports.updateAllDeals = async () => {
     const filters = [];
 
     filters.push((deal) => deal.completed_safety_orders_count >= 1);
-    filters.push({trailing_enabled: false});
+    filters.push({trailing_enabled: true});
     filters.push((deal) => !deal.bot_name.includes("(SKIP)"));
 
     const deals = await updateAllDeals(ACCOUNT_ID_TOM, filters, {

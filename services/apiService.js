@@ -13,7 +13,7 @@ const getAllActiveDeals = async (accountId, filters) => {
     let dealsForAccount = _.filter(allDeals, { account_id: parseInt(accountId,10) });
     let newFilteredDeals;
 
-    if (filters.length > 0) {
+    if (filters && filters.length > 0) {
         const newCombinedPredicate = _.overEvery(filters);
         newFilteredDeals = _.filter(dealsForAccount, newCombinedPredicate)
     } else {
@@ -40,8 +40,7 @@ const getBalances = async (accountId) => {
 }
 
 const getBotStats = async (params) => {
-    const result = await api.getBotsStats(params);
-    console.log(result);
+    const result = await api.getDeals(params);
     return result;
     // return _.filter(accounts, (account) => account.currency_code.includes('USD'));
 }
