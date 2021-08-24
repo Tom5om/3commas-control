@@ -20,9 +20,15 @@ const getAllActiveDeals = async (accountId, filters) => {
         newFilteredDeals = dealsForAccount
     }
 
-
     return newFilteredDeals;
 }
+
+const getLastDealsInTimePeriod = async (accountId, from) => {
+    const allDeals = await api.getDeals({ scope: "completed", limit: 100, account_id: accountId, from: from.toISOString() });
+
+    return allDeals;
+}
+
 
 /**
  * Get account from accounts list (holds the total USD)
@@ -47,6 +53,10 @@ const getBotStats = async (params) => {
 
 const getDeal = async (dealId) => {
     console.log(await api.getDeal(dealId));
+}
+
+const updateBot = async(botId, params) => {
+    return api.updateBot(botId, params);
 }
 
 const updateAllDeals = async (accountId, filters, params) => {
@@ -90,5 +100,7 @@ module.exports = {
     updateAllDeals,
     getAccount,
     getBalances,
-    getBotStats
+    getBotStats,
+    getLastDealsInTimePeriod,
+    updateBot
 };
