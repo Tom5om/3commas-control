@@ -1,6 +1,6 @@
 const _ = require('lodash');
-const { updateAllDeals, getLastDealsInTimePeriod, updateBot } = require('./services/apiService');
-const subMinutes = require('date-fns/subMinutes');
+const { updateAllDeals, getLastDealsInTimePeriod, updateBot, getAllActiveDeals } = require('./services/apiService');
+const { subMinutes, parseISO } = require('date-fns');
 
 const ACCOUNT_ID_TOM = process.env.THREE_COMMAS_ACCOUNT_ID;
 const ACCOUNT_ID_CHRIS = process.env.THREE_COMMAS_ACCOUNT_ID_CHRIS;
@@ -9,15 +9,14 @@ const SHOULD_RUN_BOTS = true;
 const paramsToEnableSuperBot = {
     timePeriod: 45,
     amountOfStartedAndClosedDeals: 2,
-    baseOrder: 40,
+    baseOrder: 60,
     safetyOrder: 20,
     maxAmountOfSuperBots: 1,
 }
 
 
 const paramsToDisableSuperBot = {
-    timePeriod: 40,
-    amountOfStartedAndClosedDeals: 0,
+    timePeriod: 60,
     baseOrder: 20,
     safetyOrder: 10,
 }
@@ -51,7 +50,7 @@ module.exports.handleBots = async () => {
 };
 
 module.exports.toggleSuperBots = async () => {
-    console.log("STARTING review of bots to enabled a superbot");
+    console.log("STARTING review of bots to enable a superbot");
 
     if (!SHOULD_RUN_BOTS) {
         return {
@@ -75,6 +74,7 @@ module.exports.toggleSuperBots = async () => {
             active_safety_orders_count: item[0].active_safety_orders_count,
             safety_order_step_percentage: item[0].safety_order_step_percentage,
             take_profit_type: item[0].take_profit_type,
+            start_order_type: 'market',
             strategy_list: [{"strategy":"nonstop"}],
         }
     });
@@ -93,14 +93,34 @@ module.exports.toggleSuperBots = async () => {
         const succes = await updateBot(superBotToEnable.botId, params);
     }
 
-    /**
-     * @todo find bots that have the superbot params (maybe also change the name to superbot)
-     * Change the superbots back to normal bots
-     */
+    const activeDeals =  await getAllActiveDeals(ACCOUNT_ID_TOM, [(deal) => {
+        return deal.bot_name.includes('SUPERBOT')
+    }]);
+
+    const botToDisable = _.first(activeDeals, deals => parseISO(deal.created_at) < subMinutes(new Date(), paramsToDisableSuperBot.timePeriod));
+    if (botToDisable) {
+        console.log(`Reducing bot ${deal.bot_name} to normal params`);
+        const params = {
+           base_order_volume: paramsToDisableSuperBot.baseOrder,
+           safety_order_volume: paramsToDisableSuperBot.safetyOrder,
+           name: deal.bot_name.replace(/ - SUPERBOT/, ''),
+           pairs: [deal.pair],
+           take_profit: deal.take_profit,
+           martingale_step_coefficient: deal.martingale_step_coefficient,
+           martingale_volume_coefficient: deal.martingale_volume_coefficient,
+           max_safety_orders: deal.max_safety_orders,
+           active_safety_orders_count: deal.active_safety_orders_count,
+           safety_order_step_percentage: deal.safety_order_step_percentage,
+           take_profit_type: deal.take_profit_type,
+           start_order_type: 'limit',
+           strategy_list: [{"strategy":"nonstop"}],
+        };
+        await updateBot(deal.bot_id, params);
+    }
 
     return {
         statusCode: 200,
-        body: JSON.stringify({ message: 'Updated all bots, see logs', success: true, lastDeals, groups }),
+        body: JSON.stringify({ message: 'Updated all bots, see logs', success: true, activeDeals, lastDeals, groups }),
     };
 };
 

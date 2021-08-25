@@ -190,19 +190,21 @@ module.exports.updateSheets = async () => {
 
     let deals = await apiService.getAllActiveDeals(process.env.THREE_COMMAS_ACCOUNT_ID);
     // console.log(deals[0]);
+    //
+    // const now = new Date();
+    // const toDate = new Date(
+    //     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+    // );
+    // const fromDate = sub(toDate, { days: 7 });
+    //
+    // const profits = [];
+    //
+    // for await (const botProfit of botIterator(deals, fromDate, toDate)) {
+    //     console.log(botProfit);
+    //     profits.push(botProfit);
+    // }
 
-    const now = new Date();
-    const toDate = new Date(
-        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-    );
-    const fromDate = sub(toDate, { days: 7 });
-
-    const profits = [];
-
-    for await (const botProfit of botIterator(deals, fromDate, toDate)) {
-        console.log(botProfit);
-        profits.push(botProfit);
-    }
+    // TODO do something with the profits, put them in the sheets somewhere
 
     const fields = ['id', 'pair', 'account_id', 'bot_id', 'bot_name', 'completed_safety_orders_count', 'take_profit', 'trailing_enabled', 'trailing_deviation', 'base_order_volume', 'safety_order_volume', 'bought_average_price', 'take_profit_price', 'actual_profit', 'reserved_base_coin', 'reserved_second_coin'];
     deals = deals.map(deal => {
