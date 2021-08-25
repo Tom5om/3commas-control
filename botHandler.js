@@ -7,7 +7,7 @@ const ACCOUNT_ID_CHRIS = process.env.THREE_COMMAS_ACCOUNT_ID_CHRIS;
 const SHOULD_RUN_BOTS = true;
 
 const paramsToEnableSuperBot = {
-    timePeriod: 45,
+    timePeriod: 15,
     amountOfStartedAndClosedDeals: 2,
     baseOrder: 60,
     safetyOrder: 20,
@@ -118,6 +118,7 @@ module.exports.toggleSuperBots = async () => {
         await updateBot(deal.bot_id, params);
     }
 
+    console.log("FINISHED review of bots to enable a superbot");
     return {
         statusCode: 200,
         body: JSON.stringify({ message: 'Updated all bots, see logs', success: true, activeDeals, lastDeals, groups }),
