@@ -1,14 +1,25 @@
 const { join } = require("path");
 const fetch = require("node-fetch");
-const { threeCommas: config } = require("../../config.json");
-const { sign } = require("../utils");
+const parse = require("json-templates");
+const omit = require("object.omit");
+const debug = require("debug")("3commas-control:api");
+const { threeCommas } = require("../config.json");
+const { sign } = require("./utils");
 
-// make the api object
+/**
+ * Builds the 3Commas API object.
+ *
+ */
 module.exports = factory({
   getDeals: {
+    signed: true,
     method: "GET",
     path: "/ver1/deals",
+  },
+  updateDeal: {
     signed: true,
+    method: "PATCH",
+    path: "/ver1/deals/{{deal_id}}/update_deal",
   },
 });
 
@@ -51,6 +62,8 @@ function factory(definitions) {
  * @returns {*}
  */
 async function request(method, apiPath, params = {}, headers = {}) {
+  [apiPath, params] = replacePathParams(apiPath, params);
+
   let body = method !== "GET" ? params : undefined;
   const url = toURL(apiPath, body ? undefined : params);
 
@@ -60,10 +73,15 @@ async function request(method, apiPath, params = {}, headers = {}) {
     body = searchParams.toString();
   }
 
+  debug("%s %s...", method, url.toString());
+
   const response = await fetch(url.toString(), {
     method,
-    headers,
     body,
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      ...headers,
+    },
   });
 
   return response.json();
@@ -79,7 +97,9 @@ async function request(method, apiPath, params = {}, headers = {}) {
  * @returns {*}
  */
 function signedRequest(method, apiPath, params = {}, headers = {}) {
-  const { apiKey, secretKey } = config;
+  [apiPath, params] = replacePathParams(apiPath, params);
+
+  const { apiKey, secretKey } = threeCommas;
   const fullURL = toURL(apiPath, params);
   const pathToSign = toPathWithQueryString(fullURL);
   const signature = sign(pathToSign, secretKey);
@@ -99,7 +119,7 @@ function signedRequest(method, apiPath, params = {}, headers = {}) {
  * @returns {URL}
  */
 function toURL(apiPath, params = {}) {
-  const baseURL = new URL(config.baseURL);
+  const baseURL = new URL(threeCommas.baseURL);
   const path = join(baseURL.pathname, apiPath);
   const url = new URL(path, baseURL.origin);
 
@@ -119,4 +139,17 @@ function toURL(apiPath, params = {}) {
 function toPathWithQueryString(url) {
   const urlString = url.toString();
   return urlString.substr(url.origin.length);
+}
+
+function replacePathParams(path, params = {}) {
+  const template = parse(path);
+
+  if (template.parameters.length) {
+    const omitKeys = template.parameters.map(({ key }) => key);
+
+    path = template(params);
+    params = omit(params, omitKeys);
+  }
+
+  return [path, params];
 }
