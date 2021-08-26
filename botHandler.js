@@ -56,12 +56,7 @@ module.exports.toggleSuperBots = async () => {
         return deal.bot_name.includes('SUPERBOT')
     }]);
 
-    if (superBotDeals.length >= paramsToEnableSuperBot.maxAmountOfSuperBots) {
-        return {
-            statusCode: 200,
-            body: JSON.stringify({ message: `ALREADY RUNNING ${superBotDeals.length} superBots`, success: true, paramsToEnableSuperBot  }),
-        };
-    }
+
 
     if (!SHOULD_RUN_BOTS) {
         return {
@@ -70,41 +65,48 @@ module.exports.toggleSuperBots = async () => {
         };
     }
 
-    const lastDeals = await getLastDealsInTimePeriod(ACCOUNT_ID_TOM, subMinutes(new Date(), paramsToEnableSuperBot.timePeriod));
+    // if we still want to enable super bots
+    if (superBotDeals.length < paramsToEnableSuperBot.maxAmountOfSuperBots) {
+        const lastDeals = await getLastDealsInTimePeriod(ACCOUNT_ID_TOM, subMinutes(new Date(), paramsToEnableSuperBot.timePeriod));
 
-    const groups = _.map(_.groupBy(lastDeals, 'pair'), (item,index) => {
+        const groups = _.map(_.groupBy(lastDeals, 'pair'), (item,index) => {
+            return {
+                count: item.length,
+                botId: item[0].bot_id,
+                name: item[0].bot_name,
+                pairs: [item[0].pair],
+                take_profit: item[0].take_profit,
+                martingale_step_coefficient: item[0].martingale_step_coefficient,
+                martingale_volume_coefficient: item[0].martingale_volume_coefficient,
+                max_safety_orders: item[0].max_safety_orders,
+                active_safety_orders_count: item[0].active_safety_orders_count,
+                safety_order_step_percentage: item[0].safety_order_step_percentage,
+                take_profit_type: item[0].take_profit_type,
+                start_order_type: 'market',
+                strategy_list: [{"strategy":"nonstop"}],
+            }
+        });
+
+        const superBotToEnable = _.first(groups, pair => pair.count >= paramsToEnableSuperBot.amountOfStartedAndClosedDeals);
+        if (superBotToEnable) {
+            console.log(`Upgrading bot to SUPERBOT: ${superBotToEnable.name}(${superBotToEnable.botId}) count: ${superBotToEnable.count}`);
+
+            if (! superBotToEnable.name.includes("SUPERBOT")) {
+                const params = {
+                    base_order_volume: paramsToEnableSuperBot.baseOrder,
+                    safety_order_volume: paramsToEnableSuperBot.safetyOrder,
+                    ...superBotToEnable,
+                    name: superBotToEnable.name + ` - SUPERBOT`
+                };
+                delete params.count;
+                const succes = await updateBot(superBotToEnable.botId, params);
+            }
+        }
+
         return {
-            count: item.length,
-            botId: item[0].bot_id,
-            name: item[0].bot_name,
-            pairs: [item[0].pair],
-            take_profit: item[0].take_profit,
-            martingale_step_coefficient: item[0].martingale_step_coefficient,
-            martingale_volume_coefficient: item[0].martingale_volume_coefficient,
-            max_safety_orders: item[0].max_safety_orders,
-            active_safety_orders_count: item[0].active_safety_orders_count,
-            safety_order_step_percentage: item[0].safety_order_step_percentage,
-            take_profit_type: item[0].take_profit_type,
-            start_order_type: 'market',
-            strategy_list: [{"strategy":"nonstop"}],
-        }
-    });
-
-    const superBotToEnable = _.first(groups, pair => pair.count >= paramsToEnableSuperBot.amountOfStartedAndClosedDeals);
-    if (superBotToEnable) {
-        console.log(`Upgrading bot to SUPERBOT: ${superBotToEnable.name}(${superBotToEnable.botId}) count: ${superBotToEnable.count}`);
-
-        if (! superBotToEnable.name.includes("SUPERBOT")) {
-            const params = {
-                base_order_volume: paramsToEnableSuperBot.baseOrder,
-                safety_order_volume: paramsToEnableSuperBot.safetyOrder,
-                ...superBotToEnable,
-                name: superBotToEnable.name + ` - SUPERBOT`
-            };
-            delete params.count;
-            const succes = await updateBot(superBotToEnable.botId, params);
-        }
-
+            statusCode: 200,
+            body: JSON.stringify({ message: 'Updated all bots, see logs', success: true, superBotDeals, lastDeals, groups }),
+        };
     }
 
     const botToDisable = _.first(superBotDeals, deal => parseISO(deal.created_at) < subMinutes(new Date(), paramsToDisableSuperBot.timePeriod));
@@ -113,25 +115,25 @@ module.exports.toggleSuperBots = async () => {
         const params = {
            base_order_volume: paramsToDisableSuperBot.baseOrder,
            safety_order_volume: paramsToDisableSuperBot.safetyOrder,
-           name: deal.bot_name.replace(/ - SUPERBOT/, ''),
-           pairs: [deal.pair],
-           take_profit: deal.take_profit,
-           martingale_step_coefficient: deal.martingale_step_coefficient,
-           martingale_volume_coefficient: deal.martingale_volume_coefficient,
-           max_safety_orders: deal.max_safety_orders,
-           active_safety_orders_count: deal.active_safety_orders_count,
-           safety_order_step_percentage: deal.safety_order_step_percentage,
-           take_profit_type: deal.take_profit_type,
+           name: botToDisable.bot_name.replace(/ - SUPERBOT/, ''),
+           pairs: [botToDisable.pair],
+           take_profit: botToDisable.take_profit,
+           martingale_step_coefficient: botToDisable.martingale_step_coefficient,
+           martingale_volume_coefficient: botToDisable.martingale_volume_coefficient,
+           max_safety_orders: botToDisable.max_safety_orders,
+           active_safety_orders_count: botToDisable.active_safety_orders_count,
+           safety_order_step_percentage: botToDisable.safety_order_step_percentage,
+           take_profit_type: botToDisable.take_profit_type,
            start_order_type: 'limit',
            strategy_list: [{"strategy":"nonstop"}],
         };
-        await updateBot(deal.bot_id, params);
+        await updateBot(botToDisable.bot_id, params);
     }
 
     console.log("FINISHED review of bots to enable a superbot");
     return {
         statusCode: 200,
-        body: JSON.stringify({ message: 'Updated all bots, see logs', success: true, activeDeals, lastDeals, groups }),
+        body: JSON.stringify({ message: 'Updated all bots, see logs', success: true, superBotDeals, botToDisable }),
     };
 };
 
