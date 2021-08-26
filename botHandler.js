@@ -52,6 +52,17 @@ module.exports.handleBots = async () => {
 module.exports.toggleSuperBots = async () => {
     console.log("STARTING review of bots to enable a superbot");
 
+    const superBotDeals =  await getAllActiveDeals(ACCOUNT_ID_TOM, [(deal) => {
+        return deal.bot_name.includes('SUPERBOT')
+    }]);
+
+    if (superBotDeals.length >= paramsToEnableSuperBot.maxAmountOfSuperBots) {
+        return {
+            statusCode: 200,
+            body: JSON.stringify({ message: `ALREADY RUNNING ${superBotDeals.length} superBots`, success: true, paramsToEnableSuperBot  }),
+        };
+    }
+
     if (!SHOULD_RUN_BOTS) {
         return {
             statusCode: 200,
@@ -83,14 +94,17 @@ module.exports.toggleSuperBots = async () => {
     if (superBotToEnable) {
         console.log(`Upgrading bot to SUPERBOT: ${superBotToEnable.name}(${superBotToEnable.botId}) count: ${superBotToEnable.count}`);
 
-        const params = {
-            base_order_volume: paramsToEnableSuperBot.baseOrder,
-            safety_order_volume: paramsToEnableSuperBot.safetyOrder,
-            ...superBotToEnable,
-            name: superBotToEnable.name + ` - SUPERBOT`
-        };
-        delete params.count;
-        const succes = await updateBot(superBotToEnable.botId, params);
+        if (! superBotToEnable.name.includes("SUPERBOT")) {
+            const params = {
+                base_order_volume: paramsToEnableSuperBot.baseOrder,
+                safety_order_volume: paramsToEnableSuperBot.safetyOrder,
+                ...superBotToEnable,
+                name: superBotToEnable.name + ` - SUPERBOT`
+            };
+            delete params.count;
+            const succes = await updateBot(superBotToEnable.botId, params);
+        }
+
     }
 
     const activeDeals =  await getAllActiveDeals(ACCOUNT_ID_TOM, [(deal) => {
