@@ -3,9 +3,12 @@ const fetch = require("node-fetch");
 const parse = require("json-templates");
 const omit = require("object.omit");
 const debug = require("debug")("3commas-control:api");
+const { SecretManagerServiceClient } = require("@google-cloud/secret-manager");
 const { sign } = require("./utils");
 
 const baseURL = new URL("https://api.3commas.io/public/api");
+
+const secretManagerClient = new SecretManagerServiceClient();
 
 /**
  * Builds the 3Commas API object.
@@ -137,7 +140,7 @@ async function request(method, apiPath, params = {}, headers = {}) {
 async function signedRequest(method, apiPath, params = {}, headers = {}) {
   [apiPath, params] = replacePathParams(apiPath, params);
 
-  const { apiKey, secretKey } = await getAPIKeys();
+  const [apiKey, secretKey] = await getAPIKeys();
 
   const fullURL = toURL(apiPath, params);
   const pathToSign = toPathWithQueryString(fullURL);
@@ -195,13 +198,35 @@ function replacePathParams(path, params = {}) {
 /**
  * Returns the API and Secret keys.
  *
- * @returns {Promise<{ apiKey: string, secretKey: string}>}
+ * @returns {Promise<[string, string]>}
  */
 async function getAPIKeys() {
-  return {
-    apiKey: process.env.THREE_COMMAS_API_KEY,
-    secretKey: process.env.THREE_COMMAS_SECRET_KEY,
-  };
+  const projectId = process.env.GCP_PROJECT;
 
-  // todo: google secret manager
+  // fallback to envs
+  if (!projectId) {
+    return [
+      process.env.THREE_COMMAS_API_KEY,
+      process.env.THREE_COMMAS_SECRET_KEY,
+    ];
+  }
+
+  const apiKeyName = `projects/${projectId}/secrets/3commas-api-key/versions/latest`;
+  const secretKeyName = `projects/${projectId}/secrets/3commas-secret-key/versions/latest`;
+
+  return Promise.all([apiKeyName, secretKeyName].map(getSecretValue));
+}
+
+/**
+ * Gets a secret value.
+ *
+ * @param {string} name
+ * @returns {Promise<string>}
+ */
+async function getSecretValue(name) {
+  const [version] = await secretManagerClient.accessSecretVersion({
+    name,
+  });
+
+  return version.payload.data.toString();
 }
