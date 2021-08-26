@@ -1,62 +1,49 @@
 const debug = require("debug")("3commas-control:auto-trailing");
-const { functions } = require("../../config.json");
 const { getDeals, updateDeal } = require("../three-commas");
-
-const autoTrails = functions.autoTrail;
+const { parseEventJSON } = require("../utils");
 
 /**
- * Auto trail function. Queries active deals looking for potential trailing take
- * profit opportunities defined in `config.json`.
+ * Auto trail function.
+ *
+ * Queries active deals looking for potential trailing take profit opportunities.
  *
  * @returns {Promise<void>}
  */
-module.exports = async function autoTrail() {
+module.exports = async function autoTrail(event) {
+  const { accountId, ignore, minSafetyOrders, takeProfit, trailing } =
+    parseEventJSON(event);
+
+  const params = {
+    scope: "active",
+    account_id: accountId,
+  };
+
   const updates = [];
 
-  for (let i = 0, l = autoTrails.length; i < l; ++i) {
-    const {
-      enabled,
-      accountId,
-      ignore,
-      minSafetyOrders,
-      takeProfit,
-      trailing,
-    } = autoTrails[i];
-
-    if (!enabled) {
+  for await (const deal of iterate(params)) {
+    if (!shouldTrail(deal, minSafetyOrders, ignore)) {
+      debug("%s skipping", deal.bot_name);
       continue;
     }
 
-    const params = {
-      scope: "active",
-      account_id: accountId,
-    };
+    const update = updateDeal({
+      deal_id: deal.id,
+      trailing_enabled: true,
+      take_profit: takeProfit,
+      trailing_deviation: trailing,
+    });
 
-    for await (const deal of iterate(params)) {
-      if (!shouldTrail(deal, minSafetyOrders, ignore)) {
-        debug("%s skipping", deal.bot_name);
-        continue;
-      }
+    updates.push(update);
 
-      const update = updateDeal({
-        deal_id: deal.id,
-        trailing_enabled: true,
-        take_profit: takeProfit,
-        trailing_deviation: trailing,
-      });
-
-      updates.push(update);
-
-      debug(
-        "%s trailing enabled (TTP %d% / %d%)",
-        deal.bot_name,
-        takeProfit,
-        trailing
-      );
-    }
+    debug(
+      "%s trailing enabled (TTP %d% / %d%)",
+      deal.bot_name,
+      takeProfit,
+      trailing
+    );
   }
 
-  return Promise.all(updates);
+  await Promise.all(updates);
 };
 
 /**

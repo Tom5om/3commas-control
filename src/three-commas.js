@@ -3,8 +3,9 @@ const fetch = require("node-fetch");
 const parse = require("json-templates");
 const omit = require("object.omit");
 const debug = require("debug")("3commas-control:api");
-const { threeCommas } = require("../config.json");
 const { sign } = require("./utils");
+
+const baseURL = new URL("https://api.3commas.io/public/api");
 
 /**
  * Builds the 3Commas API object.
@@ -73,7 +74,7 @@ async function request(method, apiPath, params = {}, headers = {}) {
     body = searchParams.toString();
   }
 
-  debug("%s %s...", method, url.toString());
+  debug("[%s] %s", method, url.toString());
 
   const response = await fetch(url.toString(), {
     method,
@@ -96,10 +97,11 @@ async function request(method, apiPath, params = {}, headers = {}) {
  * @param {Object} [headers]
  * @returns {*}
  */
-function signedRequest(method, apiPath, params = {}, headers = {}) {
+async function signedRequest(method, apiPath, params = {}, headers = {}) {
   [apiPath, params] = replacePathParams(apiPath, params);
 
-  const { apiKey, secretKey } = threeCommas;
+  const { apiKey, secretKey } = await getAPIKeys();
+
   const fullURL = toURL(apiPath, params);
   const pathToSign = toPathWithQueryString(fullURL);
   const signature = sign(pathToSign, secretKey);
@@ -119,7 +121,6 @@ function signedRequest(method, apiPath, params = {}, headers = {}) {
  * @returns {URL}
  */
 function toURL(apiPath, params = {}) {
-  const baseURL = new URL(threeCommas.baseURL);
   const path = join(baseURL.pathname, apiPath);
   const url = new URL(path, baseURL.origin);
 
@@ -152,4 +153,18 @@ function replacePathParams(path, params = {}) {
   }
 
   return [path, params];
+}
+
+/**
+ * Returns the API and Secret keys.
+ *
+ * @returns {Promise<{ apiKey: string, secretKey: string}>}
+ */
+async function getAPIKeys() {
+  return {
+    apiKey: process.env.THREE_COMMAS_API_KEY,
+    secretKey: process.env.THREE_COMMAS_SECRET_KEY,
+  };
+
+  // todo: google secret manager
 }

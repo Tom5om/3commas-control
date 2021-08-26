@@ -2,6 +2,7 @@ const { createHmac } = require("crypto");
 
 module.exports = {
   sign,
+  parseEventJSON,
 };
 
 /**
@@ -16,4 +17,8 @@ function sign(data, secretKey) {
   const sig = hash.update(data).digest("hex");
 
   return sig;
+}
+
+function parseEventJSON({ data }) {
+  return JSON.parse(Buffer.from(data, "base64").toString());
 }

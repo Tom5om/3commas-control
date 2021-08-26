@@ -1,5 +1,5 @@
-const autoTrail = require("./functions/auto-trail");
+require("dotenv/config");
 
 module.exports = {
-  autoTrail,
+  autoTrail: require("./functions/auto-trail"),
 };

@@ -1,11 +1,14 @@
 {
+  "main": "src/index.js",
   "dependencies": {
     "3commas-api-node": "^1.0.9",
+    "@google-cloud/functions-framework": "^1.9.0",
     "aws-sdk": "^2.889.0",
     "axios": "^0.21.1",
     "crypto-js": "^4.0.0",
     "date-fns": "^2.23.0",
     "debug": "^4.3.2",
+    "dotenv": "^10.0.0",
     "ejs": "^3.1.6",
     "express": "^4.17.1",
     "googleapis": "^39.2.0",
