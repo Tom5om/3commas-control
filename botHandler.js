@@ -107,11 +107,7 @@ module.exports.toggleSuperBots = async () => {
 
     }
 
-    const activeDeals =  await getAllActiveDeals(ACCOUNT_ID_TOM, [(deal) => {
-        return deal.bot_name.includes('SUPERBOT')
-    }]);
-
-    const botToDisable = _.first(activeDeals, deals => parseISO(deal.created_at) < subMinutes(new Date(), paramsToDisableSuperBot.timePeriod));
+    const botToDisable = _.first(superBotDeals, deal => parseISO(deal.created_at) < subMinutes(new Date(), paramsToDisableSuperBot.timePeriod));
     if (botToDisable) {
         console.log(`Reducing bot ${deal.bot_name} to normal params`);
         const params = {
