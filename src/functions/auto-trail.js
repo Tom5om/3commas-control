@@ -20,7 +20,7 @@ module.exports = async function autoTrail(event) {
 
   const updates = [];
 
-  for await (const deal of iterate(params)) {
+  for await (const deal of getDeals.iterate(params)) {
     if (!shouldTrail(deal, minSafetyOrders, ignore)) {
       debug("%s skipping", deal.bot_name);
       continue;
@@ -45,32 +45,6 @@ module.exports = async function autoTrail(event) {
 
   await Promise.all(updates);
 };
-
-/**
- * Utility iterator for looping over deals.
- *
- * @param {Object} [params]
- * @returns {AsyncIterator}
- */
-async function* iterate({ limit = 1000, offset = 0, ...params }) {
-  const deals = await getDeals({
-    ...params,
-    limit,
-    offset,
-  });
-
-  for (let i = 0; i < deals.length; ++i) {
-    yield deals[i];
-  }
-
-  if (deals.length === limit) {
-    yield* iterateDeals({
-      ...params,
-      offset: offset + limit,
-      limit,
-    });
-  }
-}
 
 /**
  * Returns if a given deal should enable trailing take profits.

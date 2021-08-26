@@ -14,6 +14,7 @@ const baseURL = new URL("https://api.3commas.io/public/api");
 module.exports = factory({
   getDeals: {
     signed: true,
+    iterator: true,
     method: "GET",
     path: "/ver1/deals",
   },
@@ -21,6 +22,17 @@ module.exports = factory({
     signed: true,
     method: "PATCH",
     path: "/ver1/deals/{{deal_id}}/update_deal",
+  },
+  getBots: {
+    signed: true,
+    iterator: true,
+    method: "GET",
+    path: "/ver1/bots",
+  },
+  updateBot: {
+    signed: true,
+    method: "PATCH",
+    path: "/ver1/bots/{{bot_id}}/update",
   },
 });
 
@@ -44,13 +56,38 @@ function factory(definitions) {
   const api = {};
 
   for (const [name, define] of Object.entries(definitions)) {
-    const { method, path, signed } = define;
+    const { method, path, signed, iterator } = define;
     const func = signed ? signedRequest : request;
+    const boundFunc = func.bind(null, method, path);
 
-    api[name] = func.bind(null, method, path);
+    api[name] = iterator ? assignIterate(boundFunc) : boundFunc;
   }
 
   return api;
+}
+
+function assignIterate(func) {
+  return Object.assign(func, {
+    async *iterate({ limit = 1000, offset = 0, ...params }) {
+      const deals = await func({
+        ...params,
+        limit,
+        offset,
+      });
+
+      for (let i = 0; i < deals.length; ++i) {
+        yield deals[i];
+      }
+
+      if (deals.length === limit) {
+        yield* func.iterate({
+          ...params,
+          offset: offset + limit,
+          limit,
+        });
+      }
+    },
+  });
 }
 
 /**
