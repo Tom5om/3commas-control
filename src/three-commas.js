@@ -5,6 +5,7 @@ const omit = require("object.omit");
 const debug = require("debug")("3commas-control:api");
 const { SecretManagerServiceClient } = require("@google-cloud/secret-manager");
 const { sign } = require("./utils");
+const WebSocket = require("ws");
 
 const baseURL = new URL("https://api.3commas.io/public/api");
 
@@ -14,30 +15,33 @@ const secretManagerClient = new SecretManagerServiceClient();
  * Builds the 3Commas API object.
  *
  */
-module.exports = factory({
-  getDeals: {
-    signed: true,
-    iterator: true,
-    method: "GET",
-    path: "/ver1/deals",
-  },
-  updateDeal: {
-    signed: true,
-    method: "PATCH",
-    path: "/ver1/deals/{{deal_id}}/update_deal",
-  },
-  getBots: {
-    signed: true,
-    iterator: true,
-    method: "GET",
-    path: "/ver1/bots",
-  },
-  updateBot: {
-    signed: true,
-    method: "PATCH",
-    path: "/ver1/bots/{{bot_id}}/update",
-  },
-});
+Object.assign(
+  exports,
+  factory({
+    getDeals: {
+      signed: true,
+      iterator: true,
+      method: "GET",
+      path: "/ver1/deals",
+    },
+    updateDeal: {
+      signed: true,
+      method: "PATCH",
+      path: "/ver1/deals/{{deal_id}}/update_deal",
+    },
+    getBots: {
+      signed: true,
+      iterator: true,
+      method: "GET",
+      path: "/ver1/bots",
+    },
+    updateBot: {
+      signed: true,
+      method: "PATCH",
+      path: "/ver1/bots/{{bot_id}}/update",
+    },
+  })
+);
 
 /**
  * Factory function for build an object for the 3Commas API service.
@@ -201,18 +205,17 @@ function replacePathParams(path, params = {}) {
  * @returns {Promise<[string, string]>}
  */
 async function getAPIKeys() {
-  const projectId = process.env.GCP_PROJECT;
+  const { THREE_COMMAS_API_KEY, THREE_COMMAS_SECRET_KEY } = process.env;
 
-  // fallback to envs
-  if (!projectId) {
-    return [
-      process.env.THREE_COMMAS_API_KEY,
-      process.env.THREE_COMMAS_SECRET_KEY,
-    ];
+  // envs
+  if (THREE_COMMAS_SECRET_KEY && THREE_COMMAS_SECRET_KEY) {
+    return [THREE_COMMAS_API_KEY, THREE_COMMAS_SECRET_KEY];
   }
 
-  const apiKeyName = `projects/${projectId}/secrets/3commas-api-key/versions/latest`;
-  const secretKeyName = `projects/${projectId}/secrets/3commas-secret-key/versions/latest`;
+  const apiKeyName =
+    "projects/1018578123164/secrets/3commas-api-key/versions/latest";
+  const secretKeyName =
+    "projects/1018578123164/secrets/3commas-secret-key/versions/latest";
 
   return Promise.all([apiKeyName, secretKeyName].map(getSecretValue));
 }
@@ -230,3 +233,56 @@ async function getSecretValue(name) {
 
   return version.payload.data.toString();
 }
+
+/**
+ * Stream deal updates.
+ *
+ * @param {Function} callback
+ * @returns {void}
+ */
+exports.stream = async function stream(callback) {
+  const [apiKey, secretKey] = await getAPIKeys();
+  const signature = sign("/deals", secretKey);
+
+  const streamIdentifier = JSON.stringify({
+    channel: "DealsChannel",
+    users: [
+      {
+        api_key: apiKey,
+        signature,
+      },
+    ],
+  });
+
+  const ws = new WebSocket("wss://ws.3commas.io/websocket");
+
+  ws.on("open", () => {
+    debug("socket opened, trying to subscribe");
+
+    ws.send(
+      JSON.stringify({
+        command: "subscribe",
+        identifier: streamIdentifier,
+      })
+    );
+  });
+
+  ws.on("error", () => debug("socket error"));
+  ws.on("close", () => debug("socket closed"));
+
+  ws.on("message", (event) => {
+    const data = JSON.parse(event.toString());
+    const { identifier, message, type } = data;
+
+    if (
+      type === "ping" ||
+      type === "confirm_subscription" ||
+      identifier !== streamIdentifier
+    ) {
+      type === "confirm_subscription" && debug("subscribed");
+      return;
+    }
+
+    callback(message);
+  });
+};

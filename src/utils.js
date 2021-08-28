@@ -3,6 +3,7 @@ const { createHmac } = require("crypto");
 module.exports = {
   sign,
   parseEventJSON,
+  delay,
 };
 
 /**
@@ -21,4 +22,8 @@ function sign(data, secretKey) {
 
 function parseEventJSON({ data }) {
   return JSON.parse(Buffer.from(data, "base64").toString());
+}
+
+async function delay(ms) {
+  return new Promise((res) => setTimeout(res, ms));
 }

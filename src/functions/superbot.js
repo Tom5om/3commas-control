@@ -1,9 +1,14 @@
 const debug = require("debug")("3commas-control:superbot");
 const date = require("date-fns");
 const { getDeals, getBots, updateBot } = require("../three-commas");
-const { parseEventJSON } = require("../utils");
+const { parseEventJSON, delay } = require("../utils");
 
 const superbotPrefix = "SUPERBOT:";
+const superbotRegExp = new RegExp(
+  `^${superbotPrefix}\\s+(.+)\\s+\\[(\\d+\\.\\d+)\\/(\\d+\\.\\d+)\\]$`
+);
+
+const botCache = new Map();
 
 /**
  * Superbot function.
@@ -13,6 +18,7 @@ const superbotPrefix = "SUPERBOT:";
  * @returns {Promise<void>}
  */
 module.exports = async function superbot(event) {
+  const options = parseEventJSON(event);
   const {
     accountId,
     minDealsClosed,
@@ -21,7 +27,18 @@ module.exports = async function superbot(event) {
     maxDurationInMins,
     baseOrderAmount,
     safetyOrderAmount,
-  } = parseEventJSON(event);
+  } = options;
+
+  const now = new Date();
+  const minStartDate = date.sub(now, { minutes: intervalInMins });
+  const minDurationDate = date.sub(now, {
+    minutes: maxDurationInMins,
+  });
+
+  // --------------------------------------------------------------------------
+
+  // Part 1: Pre-fetch bots
+  //   Warm up a cache of all active bots associated with account.
 
   const botParams = {
     limit: 100,
@@ -29,141 +46,115 @@ module.exports = async function superbot(event) {
     scope: "enabled",
   };
 
-  // fetch enabled bots
-  const bots = {};
-  for await (const bot of getBots.iterate(botParams)) bots[bot.id] = bot;
+  for await (const bot of getBots.iterate(botParams)) botCache.set(bot.id, bot);
 
-  let superbotsCount = Object.keys(bots).reduce(
-    (count, id) => count + isSuperbot(bots[id]),
-    0
-  );
+  // --------------------------------------------------------------------------
 
-  const now = new Date();
-  const minStartDate = date.sub(now, { minutes: intervalInMins });
-  // increase the from date a little as 3commas searches from the created date
-  const searchFrom = date.sub(now, {
-    minutes: intervalInMins * minDealsClosed,
+  // Part 2: Superbot suppression
+  //   Firstly, work out from the deals which bots are superbots and of which,
+  //   disable any that have went past their max deal duration.
+
+  const activeDeals = await getDeals({
+    account_id: accountId,
+    order_direction: "desc",
+    scope: "active",
   });
 
-  const counters = {};
-  const botIdsEnabled = new Set();
-  const updates = [];
+  const activeSuperbotDeals = activeDeals.filter(
+    filterSuperbotDeals(baseOrderAmount, safetyOrderAmount)
+  );
+  const activeEnabledSuperbotDeals = activeSuperbotDeals.filter(isSuperbot);
+  const activeExpiredSuperbotDeals = activeEnabledSuperbotDeals.filter(
+    filterExpiredSuperbotDeals(minDurationDate)
+  );
 
-  const dealParams = {
-    scope: "completed",
-    account_id: accountId,
-    from: searchFrom.toISOString(),
-  };
+  const botIdsToDisable = activeExpiredSuperbotDeals.map((deal) => deal.bot_id);
+  await Promise.all(botIdsToDisable.map(disableSuperbot));
 
-  // enable superbots
-  for await (const deal of getDeals.iterate(dealParams)) {
-    // check if we haven't reached max superbots
+  // --------------------------------------------------------------------------
+
+  // Part 3: Superbot detection
+  //   Next let's see if we can detect if a bot has been pumping to turn
+  //   superbot mode on.
+
+  let superbotsCount = activeSuperbotDeals.length;
+  const activeSuperbotIds = activeSuperbotDeals.map((deal) => deal.bot_id);
+
+  for (const [id, bot] of botCache) {
+    // superbot limit reached
     if (superbotsCount >= maxSuperbots) {
       break;
     }
 
-    // check the min start date
-    const created = new Date(deal.created_at);
-    if (created < minStartDate) {
-      // deal was in the buffer, skip
+    // already a superbot
+    const superbot = activeSuperbotIds.includes(id);
+    if (superbot) {
       continue;
     }
 
-    const botId = deal.bot_id;
+    // 3Commas `from` parameter goes from the created date so we need to fetch
+    // the latest 3 closed deals per bot. However 3Commas weights this request
+    // heavily so we need to backoff so our IP doesn't get blocked. A simple
+    // 1000ms delay seems to do the trick.
+    await delay(1000);
 
-    // init bot deals counter
-    if (counters[botId] === undefined) {
-      counters[botId] = 0;
-    }
+    debug("checking %s deals", bot.name);
 
-    const count = ++counters[botId];
-    const bot = bots[botId];
-
-    if (
-      !bot || // no bot ???
-      isSuperbot(bot) || // no super-duperbots XD
-      count < minDealsClosed || // doesn't meet the min deals
-      botIdsEnabled.has(botId) // already enabled
-    ) {
-      continue;
-    }
-
-    const update = updateBot({
-      bot_id: botId,
-      name: superbotName(bot),
-      base_order_volume: baseOrderAmount,
-      safety_order_volume: safetyOrderAmount,
-
-      // 3commas required fields :S
-      pairs: JSON.stringify(bot.pairs),
-      take_profit: bot.take_profit,
-      martingale_volume_coefficient: bot.martingale_volume_coefficient,
-      martingale_step_coefficient: bot.martingale_step_coefficient,
-      max_safety_orders: bot.max_safety_orders,
-      active_safety_orders_count: bot.active_safety_orders_count,
-      safety_order_step_percentage: bot.safety_order_step_percentage,
-      take_profit_type: bot.take_profit_type,
-      strategy_list: JSON.stringify(bot.strategy_list),
-    });
-
-    debug("%s SUPERBOT enabled", bot.name);
-
-    ++superbotsCount;
-    botIdsEnabled.add(botId);
-    updates.push(update);
-  }
-
-  // turn off superbots
-  const superbotIds = Object.keys(bots).filter((id) => isSuperbot(bots[id]));
-  for (let i = 0, l = superbotIds.length; i < l; ++i) {
-    const id = superbotIds[i];
-    const bot = bots[id];
-
+    // recent deals
     const deals = await getDeals({
       account_id: accountId,
       bot_id: id,
-      scope: "active",
-      limit: 1000, // highly unlikely to have a 1000 deals open
+      order_direction: "desc",
+      scope: "completed",
+      limit: minDealsClosed,
     });
 
-    const minDurationDate = date.sub(new Date(), {
-      minutes: maxDurationInMins,
-    });
-    const disableSuperbot = deals.some((deal) => {
-      const created = new Date(deal.created_at);
-      return created < minDurationDate;
+    // count how many closed within the interval
+    const innerDealsClosed = deals.filter(({ closed_at: closedAt }) => {
+      const closed = new Date(closedAt);
+      return minStartDate < closed;
     });
 
-    if (disableSuperbot) {
-      const [originalName, originalBaseOrderAmount, originalSafetyORderAmount] =
-        extractNameAndOrders(bot);
-
-      const update = updateBot({
+    if (innerDealsClosed.length === minDealsClosed) {
+      await updateBot({
+        ...requiredFields(bot),
         bot_id: id,
-        name: originalName,
-        base_order_volume: originalBaseOrderAmount,
-        safety_order_volume: originalSafetyORderAmount,
-
-        // 3commas required fields :S
-        pairs: JSON.stringify(bot.pairs),
-        take_profit: bot.take_profit,
-        martingale_volume_coefficient: bot.martingale_volume_coefficient,
-        martingale_step_coefficient: bot.martingale_step_coefficient,
-        max_safety_orders: bot.max_safety_orders,
-        active_safety_orders_count: bot.active_safety_orders_count,
-        safety_order_step_percentage: bot.safety_order_step_percentage,
-        take_profit_type: bot.take_profit_type,
-        strategy_list: JSON.stringify(bot.strategy_list),
+        name: superbotName(bot),
+        base_order_volume: baseOrderAmount,
+        safety_order_volume: safetyOrderAmount,
       });
 
-      updates.push(update);
-
-      debug("%s SUPERBOT disabled", originalName);
+      superbotsCount += 1;
+      debug("%s SUPERBOT enabled", bot.name);
     }
   }
-
-  await Promise.all(updates);
 };
+
+function filterSuperbotDeals(baseOrderAmount, safetyOrderAmount) {
+  return (deal) => {
+    // detect by the bot name
+    if (isSuperbot(deal)) {
+      return true;
+    }
+
+    const dealBaseOrderAmount = parseFloat(deal.base_order_volume);
+    const dealSafetyOrderAmount = parseFloat(deal.safety_order_volume);
+
+    // Is the active deal the same order amounts. This is a fallback detection
+    // for when a superbot has been disabled however it still has an open deal.
+    return (
+      dealSafetyOrderAmount === safetyOrderAmount &&
+      dealBaseOrderAmount === baseOrderAmount
+    );
+  };
+}
+
+function filterExpiredSuperbotDeals(minDate) {
+  return (deal) => {
+    const created = new Date(deal.created_at);
+    return created < minDate;
+  };
+}
 
 function isSuperbot({ name, bot_name: botName }) {
   return (botName || name).startsWith(superbotPrefix);
@@ -182,9 +173,40 @@ function superbotName({
 }
 
 function extractNameAndOrders({ name }) {
-  const regexp = new RegExp(
-    `^${superbotPrefix}\\s+(.+)\\s+\\[(\\d+\\.\\d+)\\/(\\d+\\.\\d+)\\]$`
-  );
+  return name.match(superbotRegExp).slice(1);
+}
 
-  return name.match(regexp).slice(1);
+async function disableSuperbot(id) {
+  const bot = botCache.get(id);
+
+  const [originalName, originalBaseOrderAmount, originalSafetyORderAmount] =
+    extractNameAndOrders(bot);
+
+  await updateBot({
+    ...requiredFields(bot),
+    bot_id: id,
+    name: originalName,
+    base_order_volume: originalBaseOrderAmount,
+    safety_order_volume: originalSafetyORderAmount,
+  });
+
+  debug("%s SUPERBOT disabled", originalName);
+}
+
+function requiredFields(bot) {
+  // stupid 3Commas required fields
+  return {
+    name: bot.name,
+    base_order_volume: bot.base_order_volume,
+    safety_order_volume: bot.safety_order_volume,
+    pairs: JSON.stringify(bot.pairs),
+    take_profit: bot.take_profit,
+    martingale_volume_coefficient: bot.martingale_volume_coefficient,
+    martingale_step_coefficient: bot.martingale_step_coefficient,
+    max_safety_orders: bot.max_safety_orders,
+    active_safety_orders_count: bot.active_safety_orders_count,
+    safety_order_step_percentage: bot.safety_order_step_percentage,
+    take_profit_type: bot.take_profit_type,
+    strategy_list: JSON.stringify(bot.strategy_list),
+  };
 }
