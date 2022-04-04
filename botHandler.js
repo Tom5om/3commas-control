@@ -4,7 +4,9 @@ const subMinutes = require('date-fns/subMinutes');
 
 const ACCOUNT_ID_TOM = process.env.THREE_COMMAS_ACCOUNT_ID;
 const ACCOUNT_ID_CHRIS = process.env.THREE_COMMAS_ACCOUNT_ID_CHRIS;
+const ACCOUNT_ID_KUCOIN_TOM = process.env.THREE_COMMAS_ACCOUNT_ID_KUCOIN_TOM;
 const SHOULD_RUN_BOTS = true;
+const SHOULD_RUN_SUPER_BOTS = false;
 
 const paramsToEnableSuperBot = {
     timePeriod: 45,
@@ -53,7 +55,7 @@ module.exports.handleBots = async () => {
 module.exports.toggleSuperBots = async () => {
     console.log("STARTING review of bots to enabled a superbot");
 
-    if (!SHOULD_RUN_BOTS) {
+    if (!SHOULD_RUN_SUPER_BOTS) {
         return {
             statusCode: 200,
             body: JSON.stringify({ message: 'NOT UPDATING BOTS', success: true }),
@@ -105,7 +107,11 @@ module.exports.toggleSuperBots = async () => {
 };
 
 module.exports.handleChrisBots = async () => {
+    console.log("NOT RUNNING");
+    return false;
+
     console.log("STARTING update of all Chris bots");
+
 
     const filters = [];
 
@@ -120,6 +126,28 @@ module.exports.handleChrisBots = async () => {
     });
 
     console.log("FINISHED update of all Chris bots");
+    return {
+        statusCode: 200,
+        body: JSON.stringify({ message: 'Updated all bots, see logs', success: true, deals }),
+    };
+};
+
+module.exports.handleKucoinTomBots = async () => {
+    console.log("STARTING update of all ACCOUNT_ID_KUCOIN_TOM bots");
+
+    const filters = [];
+
+    filters.push((deal) => deal.completed_safety_orders_count >= 9);
+    filters.push({trailing_enabled: false});
+    filters.push((deal) => !deal.bot_name.includes("(SKIP)"));
+
+    const deals = await updateAllDeals(ACCOUNT_ID_KUCOIN_TOM, filters, {
+        trailing_enabled: true,
+        take_profit: 2.40,
+        trailing_deviation: 0.4
+    });
+
+    console.log("FINISHED update of all ACCOUNT_ID_KUCOIN_TOM bots");
     return {
         statusCode: 200,
         body: JSON.stringify({ message: 'Updated all bots, see logs', success: true, deals }),
